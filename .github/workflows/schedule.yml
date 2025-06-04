@@ -1,10 +1,57 @@
 on:
   schedule:
-    - cron: "*/2 * * * *"
+    - cron: "30 17 * * *" # 每天凌晨1:30北京时间运行 (UTC 17:30)
 
 jobs:
-  hello_world:
+  monitor_status:
     runs-on: ubuntu-latest
     steps:
-      - name: Echo current time
-        run: echo "The current server time is $(date)"
+      - name: 检查网站状态
+        id: check_website
+        run: |
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://115.190.109.17:3000/)
+          if [[ "$STATUS_CODE" -eq 200 ]]; then
+            echo "::set-output name=status::正常"
+          else
+            echo "::set-output name=status::异常"
+          fi
+          echo "::set-output name=code::$STATUS_CODE"
+
+      - name: 检查API状态
+        id: check_api
+        run: |
+          API_STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://115.190.109.17/v1)
+          API_RESPONSE_BODY=$(curl -s http://115.190.109.17/v1)
+
+          if [[ "$API_STATUS_CODE" -eq 200 && "$API_RESPONSE_BODY" == *'"welcome": "Dify OpenAPI"'* ]]; then
+            echo "::set-output name=status::正常"
+          else
+            echo "::set-output name=status::异常 (内容不符合预期)"
+          fi
+          echo "::set-output name=code::$API_STATUS_CODE"
+
+      - name: 发送邮件通知
+        if: always() # 确保此步骤总是运行，无论之前的步骤是否失败
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.qq.com # QQ邮箱的SMTP服务器
+          server_port: 465 # QQ邮箱的SSL端口
+          username: ${{ secrets.MAIL_USERNAME }} # 邮箱账号，需要设置为Secret
+          password: ${{ secrets.MAIL_PASSWORD }} # 邮箱授权码，需要设置为Secret (不是邮箱密码)
+          subject: "网站/API 状态报告 - $(date '+%Y-%m-%d %H:%M:%S')"
+          to: 3047754883@qq.com
+          from: GitHub Actions Monitor <${{ secrets.MAIL_USERNAME }}>
+          body: |
+            尊敬的用户，
+
+            以下是您的网站和API的每日状态报告：
+
+            网站 (http://115.190.109.17:3000/):
+            状态: ${{ steps.check_website.outputs.status }} (HTTP 状态码: ${{ steps.check_website.outputs.code }})
+
+            API (http://115.190.109.17/v1):
+            状态: ${{ steps.check_api.outputs.status }} (HTTP 状态码: ${{ steps.check_api.outputs.code }})
+
+            请注意，此邮件由GitHub Actions自动发送。
+
+            报告生成时间: $(date '+%Y-%m-%d %H:%M:%S')
