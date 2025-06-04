@@ -1,34 +1,38 @@
 on:
   schedule:
-    - cron: "30 17 * * *" # 每天凌晨1:30北京时间运行 (UTC 17:30)
+    - cron: "0 18 * * *" # 每天凌晨2:00北京时间运行 (UTC 18:00)
 
 jobs:
   monitor_status:
     runs-on: ubuntu-latest
     steps:
+      - name: 获取当前时间
+        id: get_current_time
+        run: echo "current_time=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
       - name: 检查网站状态
         id: check_website
         run: |
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://115.190.109.17:3000/)
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L http://115.190.109.17:3000/)
           if [[ "$STATUS_CODE" -eq 200 ]]; then
-            echo "::set-output name=status::正常"
+            echo "status=正常" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=status::异常"
+            echo "status=异常" >> $GITHUB_OUTPUT
           fi
-          echo "::set-output name=code::$STATUS_CODE"
+          echo "code=$STATUS_CODE" >> $GITHUB_OUTPUT
 
       - name: 检查API状态
         id: check_api
         run: |
-          API_STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://115.190.109.17/v1)
-          API_RESPONSE_BODY=$(curl -s http://115.190.109.17/v1)
+          API_STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L http://115.190.109.17/v1)
+          API_RESPONSE_BODY=$(curl -s -L http://115.190.109.17/v1)
 
           if [[ "$API_STATUS_CODE" -eq 200 && "$API_RESPONSE_BODY" == *'"welcome": "Dify OpenAPI"'* ]]; then
-            echo "::set-output name=status::正常"
+            echo "status=正常" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=status::异常 (内容不符合预期)"
+            echo "status=异常 (内容不符合预期)" >> $GITHUB_OUTPUT
           fi
-          echo "::set-output name=code::$API_STATUS_CODE"
+          echo "code=$API_STATUS_CODE" >> $GITHUB_OUTPUT
 
       - name: 发送邮件通知
         if: always() # 确保此步骤总是运行，无论之前的步骤是否失败
@@ -38,7 +42,7 @@ jobs:
           server_port: 465 # QQ邮箱的SSL端口
           username: ${{ secrets.MAIL_USERNAME }} # 邮箱账号，需要设置为Secret
           password: ${{ secrets.MAIL_PASSWORD }} # 邮箱授权码，需要设置为Secret (不是邮箱密码)
-          subject: "网站/API 状态报告 - $(date '+%Y-%m-%d %H:%M:%S')"
+          subject: "网站/API 状态报告 - ${{ steps.get_current_time.outputs.current_time }}"
           to: 3047754883@qq.com
           from: GitHub Actions Monitor <${{ secrets.MAIL_USERNAME }}>
           body: |
@@ -54,4 +58,4 @@ jobs:
 
             请注意，此邮件由GitHub Actions自动发送。
 
-            报告生成时间: $(date '+%Y-%m-%d %H:%M:%S')
+            报告生成时间: ${{ steps.get_current_time.outputs.current_time }}
