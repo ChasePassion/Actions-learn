@@ -1,6 +1,6 @@
 on:
   schedule:
-    - cron: "0 18 * * *" # 每天凌晨2:00北京时间运行 (UTC 18:00)
+    - cron: "10 3 * * *" # 每天早上11:10北京时间运行 (UTC 03:10)
 
 jobs:
   monitor_status:
@@ -13,7 +13,7 @@ jobs:
       - name: 检查网站状态
         id: check_website
         run: |
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L http://115.190.109.17:3000/)
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L -H "Accept-Language: zh-CN,zh;q=0.9" http://115.190.109.17:3000/)
           if [[ "$STATUS_CODE" -eq 200 ]]; then
             echo "status=正常" >> $GITHUB_OUTPUT
           else
@@ -24,8 +24,8 @@ jobs:
       - name: 检查API状态
         id: check_api
         run: |
-          API_STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L http://115.190.109.17/v1)
-          API_RESPONSE_BODY=$(curl -s -L http://115.190.109.17/v1)
+          API_STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -L http://115.190.109.17/v1/)
+          API_RESPONSE_BODY=$(curl -s -L http://115.190.109.17/v1/)
 
           if [[ "$API_STATUS_CODE" -eq 200 && "$API_RESPONSE_BODY" == *'"welcome": "Dify OpenAPI"'* ]]; then
             echo "status=正常" >> $GITHUB_OUTPUT
@@ -53,7 +53,7 @@ jobs:
             网站 (http://115.190.109.17:3000/):
             状态: ${{ steps.check_website.outputs.status }} (HTTP 状态码: ${{ steps.check_website.outputs.code }})
 
-            API (http://115.190.109.17/v1):
+            API (http://115.190.109.17/v1/):
             状态: ${{ steps.check_api.outputs.status }} (HTTP 状态码: ${{ steps.check_api.outputs.code }})
 
             请注意，此邮件由GitHub Actions自动发送。
